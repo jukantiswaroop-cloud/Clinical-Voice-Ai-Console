@@ -1,0 +1,6 @@
+{
+  "name": "Clinical Voice AI Console",
+  "description": "An enterprise-grade, low-latency, real-time clinical voice AI agent platform for healthcare appointment booking.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
