@@ -47,6 +47,7 @@ import {
 import SidebarLeft from './components/SidebarLeft';
 import SidebarRight from './components/SidebarRight';
 import CenterChat from './components/CenterChat';
+import VoiceHubModal from './components/VoiceHubModal';
 
 export default function App() {
   // Theme state
@@ -109,9 +110,24 @@ export default function App() {
 
   // Microphone and audio states
   const [isListening, setIsListening] = useState<boolean>(false);
+  const [isVoiceHubOpen, setIsVoiceHubOpen] = useState<boolean>(false);
   const recognitionRef = useRef<any>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Warm up client-side speechSynthesis voices immediately on mount
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+      const warmUpVoices = () => {
+        window.speechSynthesis.getVoices();
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', warmUpVoices);
+      return () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', warmUpVoices);
+      };
+    }
+  }, []);
 
   // Push Floating Notification toast message
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warn' | 'info' } | null>(null);
@@ -329,10 +345,9 @@ export default function App() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
-      showToast('Natives speech recognition is not supported in this browser viewport.', 'warn');
-      addLog('Voice Engine failed: SpeechRecognition placeholder not found', 'system', 'error');
-      // Simulated fallback interaction
-      handleSimulatedVoiceRecognition();
+      showToast('Native speech recognition is not supported. Opening Aura Dictation Pod...', 'warn');
+      addLog('Voice Engine redirect: Standard SpeechRecognition is unavailable. Activating Dictation Pod.', 'system', 'info');
+      setIsVoiceHubOpen(true);
       return;
     }
 
@@ -371,10 +386,17 @@ export default function App() {
 
         recognition.onerror = (event: any) => {
           console.warn('SpeechRecognition error:', event.error);
-          addLog(`Voicetime channel clashing or error: ${event.error}`, 'system', 'error');
           setIsListening(false);
           setOrchestrationState('IDLE');
-          showToast(`Microphone capturing interrupted: ${event.error}`, 'warn');
+          
+          if (event.error === 'network') {
+            addLog(`Speech Recognition network block: Standard browsers restrict remote speech processing APIs inside sandboxed iframes. MITIGATION: Automatically opening the Aura Clinical Dictation Pod for real-world voice recording and accent dispatch...`, 'system', 'warning');
+            showToast(`Speech recognition blocked. Opening Dictation Pod...`, 'warn');
+            setIsVoiceHubOpen(true);
+          } else {
+            addLog(`Speech Recognition error: ${event.error}`, 'system', 'error');
+            showToast(`Microphone capturing interrupted: ${event.error}`, 'warn');
+          }
         };
 
         recognition.onend = () => {
@@ -539,7 +561,7 @@ export default function App() {
     if (lang === 'Hindi') ackPhrase = "मल्टीलिंगुअल वॉयस इंजन को हिन्दी भाषा पर स्विच कर दिया गया है।";
     else if (lang === 'Tamil') ackPhrase = "குரல் தளம் இப்போது தமிழ் மொழிக்கு மாற்றப்பட்டுள்ளது.";
     else if (lang === 'Telugu') ackPhrase = "వాయిస్ సిస్టమ్ ఇప్పుడు తెలుగు భాషకు మారినది.";
-    else if (lang === 'Kannada') ackPhrase = "ಕನ್ನಡ ಧ್ವನಿ ಸಹಾಯಕ ಸಕ್ರಿಯಗೊಂಡಿದೆ.";
+    else if (lang === 'Kannada') ackPhrase = "ಕನ್ನಡ ಧ್วನಿ ಸಹಾಯಕ ಸಕ್ರಿಯಗೊಂಡಿದೆ.";
 
     speakText(ackPhrase, lang);
   };
@@ -561,7 +583,7 @@ export default function App() {
   };
 
   // Main NLP clinical parsing & state router
-  const processClinicalRequest = (rawQuery: string) => {
+  const processClinicalRequest = async (rawQuery: string) => {
     const textQuery = rawQuery.trim();
     if (!textQuery) return;
 
@@ -605,7 +627,7 @@ export default function App() {
     // Check Kannada
     else if (/ನಾಳೆ|ಬೆಳಿಗ್ಗೆ|ಅಪಾಯಿಂಟ್ಮೆಂಟ್|ಬುಕ್|ಜೆಂಕಿನ್ಸ್|ಡಾಕ್ಟರ್/.test(textQuery)) {
       detectedLang = 'Kannada';
-      queryTranslation = "Book appointment for tomorrow morning 10:00 AM with neurologist Dr. Sarah Jenkins.";
+      queryTranslation = "Book appointment tomorrow morning at 10:00 AM with Dr. Sarah Jenkins.";
     }
 
     addLog(`Processing voice payload. STT latency budget: ${randomStt}ms`, 'system', 'info');
@@ -624,7 +646,7 @@ export default function App() {
     setMessages(prev => [...prev, userMsg]);
     setOrchestrationState('TRANSCRIBING');
 
-    // Start Sequential pipe animations
+    // Start Sequential pipeline animations
     setTimeout(() => {
       // 2. Language Detection state
       setOrchestrationState('DETECTING_LANGUAGE');
@@ -635,244 +657,190 @@ export default function App() {
         addLog(`Auto-detected language switched from ${currentLanguage} to ${detectedLang}`, 'language', 'success');
       }
 
-      setTimeout(() => {
+      setTimeout(async () => {
         // 3. Querying Calendar schedules
         setOrchestrationState('QUERYING_CALENDAR');
-        setReasoningActivity('intent.parse()', `Parsed query keyword intent bounds. Detected intent: BOOK_APPOINTMENT/MANAGE on ${detectedLang}`, 95);
-        addLog(`Performing medical calendar scans...`, 'calendar', 'info');
+        setReasoningActivity('intent.parse()', `Parsing clinical semantics via Gemini dynamic routing...`, 95);
+        addLog(`Performing medical calendar scans with backend API...`, 'calendar', 'info');
 
-        let responseText = '';
-        let intentKey = 'UNKNOWN';
-        let matchedDoctor = 'None';
+        try {
+          // Model call to express proxy route
+          const chatHistory = messages.map(m => ({
+            role: m.sender === 'user' ? 'user' : 'model',
+            parts: [{ text: m.text }]
+          })).slice(-10);
 
-        // Detect doctor name in query
-        if (lowerQuery.includes('patel')) {
-          matchedDoctor = 'Dr. Angela Patel';
-        } else if (lowerQuery.includes('kumar') || lowerQuery.includes('राजेश')) {
-          matchedDoctor = 'Dr. Rajesh Kumar';
-        } else if (lowerQuery.includes('jenkins') || lowerQuery.includes('ಸಾರಾ') || lowerQuery.includes('ಸಾರಾ ಜೆಂಕಿನ್ಸ್') || lowerQuery.includes('ಸಾಹಿತ್ಯ') || lowerQuery.includes('ಸವಿನಾ') || lowerQuery.includes('ಸಾರ')) {
-          matchedDoctor = 'Dr. Sarah Jenkins';
-        } else if (lowerQuery.includes('rao') || lowerQuery.includes('வெங்கட்') || lowerQuery.includes('రావ్')) {
-          matchedDoctor = 'Dr. Venkat Rao';
-        }
-
-        // A) RESCHEDULE CONFLICT TRIGGERS (e.g. reschedule Patel at 11:30 AM)
-        if ((lowerQuery.includes('reschedule') || lowerQuery.includes('change')) && lowerQuery.includes('11:30') && lowerQuery.includes('patel')) {
-          intentKey = 'RESCHEDULE';
-          setOrchestrationState('RESOLVING_CONFLICTS');
-          addLog(`Scheduling collision detected for Dr. Patel at 11:30 AM`, 'calendar', 'warning');
-          setReasoningActivity('calendar.query()', 'Queried Dr. Patel scheduling grids. Found 1 double-booking.', 48);
-          
-          responseText = `Swaroop, scheduling conflict detected. Dr. Angela Patel (Cardiologist) has an urgent surgical block or existing appointment booked at 11:30 AM. However, she has alternate slots open tomorrow. I have loaded alternative times on your display card. Would you like to schedule 09:00 AM, 02:00 PM, or tomorrow at 10:00 AM?`;
-
-          // Prepare active elements on message
-          const conflictMsg: Message = {
-            id: `assistant_conf_${Date.now()}`,
-            sender: 'assistant',
-            text: responseText,
-            timestamp: new Date().toTimeString().split(' ')[0],
-            intentConfidence: 97,
-            toolConfidence: 98,
-            isStreaming: false,
-            conflictData: {
-              originalSlot: '11:30 AM',
-              alternatives: ['09:00 AM - Today', '02:00 PM - Today', '10:00 AM - Tomorrow']
-            }
-          };
-
-          setSessionMemory({
-            intent: 'RESCHEDULE',
-            doctor: 'Dr. Angela Patel',
-            time: '11:30 AM (CONFLICT)',
-            stage: 'Conflict Resolution Prompt Mode'
+          const response = await fetch('/api/gemini/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              rawQuery: textQuery,
+              currentLanguage: detectedLang,
+              activeAppointment: appointment,
+              conversationHistory: chatHistory
+            })
           });
 
-          setTimeout(() => {
-            setMessages(prev => [...prev, conflictMsg]);
-            speakText(responseText, detectedLang);
-            setReasoningActivity('conflict.resolve()', 'Synthesized 3 low-latency slot alternatives successfully.', 115);
-          }, 500);
-
-          return;
-        }
-
-        // B) CANCEL INTENT
-        else if (lowerQuery.includes('cancel') || lowerQuery.includes('remove') || lowerQuery.includes('delete') || lowerQuery.includes('ರದ್ದು') || lowerQuery.includes('రద్దు') || lowerQuery.includes('ரத்து') || lowerQuery.includes('रद्द')) {
-          intentKey = 'CANCEL';
-          setOrchestrationState('GENERATING_RESPONSE');
-          setReasoningActivity('calendar.query()', 'Locked active clinical session ID pat_001. Matching Neuro range.', 45);
-
-          if (detectedLang === 'Hindi') {
-            responseText = `Swaroop Jukanti, आपका डॉ. सविना जेंकिन्स के साथ अपॉइंटमेंट कल सुबह 11:00 बजे का सफलतापूर्वक रद्द कर दिया गया है।`;
-            showToast('अपॉइंटमेंट रद्द कर दिया गया', 'success');
-          } else if (detectedLang === 'Tamil') {
-            responseText = `Swaroop, நாளை காலை 11:00 மணிக்கு டாக்டர் சாரா ஜென்கின்ஸுடனான உங்கள் அப்பாயிண்ட்மெண்ட் வெற்றிகரமாக ரத்து செய்யப்பட்டுள்ளது.`;
-            showToast('அப்பாயிண்ட்மெண்ட் வெற்றிகரமாக ரத்து செய்யப்பட்டது', 'success');
-          } else if (detectedLang === 'Telugu') {
-            responseText = `Swaroop, రేపు ఉదయం 11:00 గంటలకు డాక్టర్ సారా జెంకిన్స్ తో మీ అపాయింట్‌మెంట్ రద్దు చేయబడింది.`;
-            showToast('అపాయింట్మెంట్ రద్దు విజయవంతమైంది', 'success');
-          } else if (detectedLang === 'Kannada') {
-            responseText = `Swaroop, ನಾಳೆ ಬೆಳಿಗ್ಗೆ 11:00 ಗಂಟೆಗೆ ಡಾ. ಸಾರಾ ಜೆಂಕಿನ್ಸ್ ಅವರೊಂದಿಗಿನ ನಿಮ್ಮ ಅಪಾಯಿಂಟ್‌ಮೆಂಟ್ ಅನ್ನು ಯಶಸ್ವಿಯಾಗಿ ರದ್ದುಗೊಳಿಸಲಾಗಿದೆ.`;
-            showToast('ಅಪಾಯಿಂಟ್ಮೆಂಟ್ ಯಶಸ್ವಿಯಾಗಿ ರದ್ದುಗೊಂಡಿದೆ', 'success');
-          } else {
-            responseText = `Swaroop, your clinical appointment with Dr. Sarah Jenkins scheduled for tomorrow at 11:00 AM has been successfully cancelled.`;
-            showToast('Appointment cancelled successfully', 'success');
+          if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
           }
-          setAppointment(null);
-          addLog(`Appointment cancelled for Dr. Sarah Jenkins`, 'calendar', 'success');
-        }
 
-        // C) BOOKING (Hindi variant)
-        else if (detectedLang === 'Hindi' || lowerQuery.includes('kumar') || lowerQuery.includes('राजेश')) {
-          intentKey = 'BOOK';
-          detectedLang = 'Hindi'; // Align speaking voice with response language
+          const parsedData = await response.json();
+          addLog(`Gemini engine returned structured clinical intent payload`, 'system', 'success');
+
+          const responseLang = parsedData.detectedLang || detectedLang;
+          if (responseLang !== currentLanguage && ['English', 'Hindi', 'Tamil'].includes(responseLang)) {
+            setCurrentLanguage(responseLang);
+          }
+
+          // Handle conflict detected state
+          if (parsedData.conflictDetected) {
+            setOrchestrationState('RESOLVING_CONFLICTS');
+            addLog(`Conflict matching occurred: ${parsedData.responseText}`, 'calendar', 'warning');
+            setReasoningActivity('calendar.query()', parsedData.reasoning || 'Collision detected on requested time slot.', 45);
+
+            const conflictMsg: Message = {
+              id: `assistant_conf_${Date.now()}`,
+              sender: 'assistant',
+              text: parsedData.responseText,
+              timestamp: new Date().toTimeString().split(' ')[0],
+              intentConfidence: 98,
+              toolConfidence: 97,
+              isStreaming: false,
+              conflictData: {
+                originalSlot: parsedData.preferredTime || 'Selected Slot',
+                alternatives: parsedData.alternatives || ['09:00 AM', '02:00 PM', 'Tomorrow 10:00 AM']
+              }
+            };
+
+            setSessionMemory({
+              intent: parsedData.intent || 'BOOK',
+              doctor: parsedData.doctorName || 'None',
+              time: `${parsedData.preferredTime || 'None'} (CONFLICT)`,
+              stage: 'Conflict Resolution Protocol Active'
+            });
+
+            setMessages(prev => [...prev, conflictMsg]);
+            speakText(parsedData.responseText, responseLang);
+            setReasoningActivity('conflict.resolve()', 'Loaded low-latency slot alternatives onto clinic interface.', 110);
+            return;
+          }
+
+          // Generate general sound output or action confirmed
           setOrchestrationState('GENERATING_RESPONSE');
-          setReasoningActivity('calendar.query()', 'Found Dr. Rajesh Kumar (Pediatrics) available tomorrow सुबह ९:३० बजे.', 35);
-          
-          responseText = `अपॉइंटमेंट की पुष्टि हो गई है, Swaroop Jukanti! मैंने कल सुबह 09:30 बजे बाल रोग विशेषज्ञ डॉ. राजेश कुमार (Dr. Rajesh Kumar) के साथ आपका अपॉइंटमेंट बुक कर दिया है। पुष्टिकरण कार्ड आपके मोबाइल पर भेज दिया गया है।`;
+          setReasoningActivity('calendar.query()', parsedData.reasoning || `Gemini analysis parsed successfully.`, 75);
 
-          const newAppHindi: Appointment = {
-            id: 'app_kumar',
-            patientId: 'pat_001',
-            doctorId: 'doc_2',
-            doctorName: 'Dr. Rajesh Kumar',
-            specialty: 'Pediatrician',
-            date: 'May 22, 2026',
-            time: '09:30 AM',
-            status: 'CONFIRMED'
-          };
-          setAppointment(newAppHindi);
-          addLog(`Hindi slot reservation confirmed for Dr. Rajesh Kumar at 09:30 AM`, 'calendar', 'success');
-          showToast('डॉ. राजेश कुमार के साथ अपॉइंटमेंट बुक किया गया', 'success');
-        }
+          // Handle schedule updates
+          if (parsedData.actionConfirmed && parsedData.updatedAppointment) {
+            const updated = parsedData.updatedAppointment;
+            if (updated.status === 'CANCELLED') {
+              setAppointment(null);
+              addLog(`Appointment cancelled for ${updated.doctorName}`, 'calendar', 'success');
+              showToast('Clinical Appointment cancelled', 'warn');
+            } else {
+              const matchedDoc = doctors.find(d => d.name.toLowerCase().includes(updated.doctorName.toLowerCase())) || doctors[0];
+              const newApp: Appointment = {
+                id: `app_${Date.now()}`,
+                patientId: 'pat_001',
+                doctorId: matchedDoc.id,
+                doctorName: updated.doctorName,
+                specialty: updated.specialty || matchedDoc.specialty,
+                date: updated.date,
+                time: updated.time,
+                status: 'CONFIRMED'
+              };
+              setAppointment(newApp);
+              addLog(`Clinical schedule locked for ${updated.doctorName} at ${updated.time}`, 'calendar', 'success');
+              showToast(`Confirmed Dr. ${updated.doctorName.split('.').pop()?.trim()} @ ${updated.time}`, 'success');
+            }
+          }
 
-        // D) BOOKING (Tamil variant)
-        else if (detectedLang === 'Tamil' || lowerQuery.includes('ராவிடம்') || lowerQuery.includes('வெங்கட்') || lowerQuery.includes('ராவ்')) {
-          intentKey = 'BOOK';
-          detectedLang = 'Tamil'; // Align speaking voice with response language
-          setOrchestrationState('GENERATING_RESPONSE');
-          setReasoningActivity('calendar.query()', 'Parsed Tamil request. Loading general physician slots.', 42);
+          // Update memory block
+          setSessionMemory({
+            intent: parsedData.intent || 'None',
+            doctor: parsedData.doctorName || 'None',
+            time: parsedData.preferredTime || 'None',
+            stage: 'Calibrated successfully'
+          });
 
-          responseText = `அப்பாயிண்ட்மெண்ட் உறுதி செய்யப்பட்டுள்ளது, Swaroop! நாளை காலை 11:00 மணிக்கு பொது மருத்துவர் டாக்டர் வெங்கட் ராவ் (Dr. Venkat Rao) உடன் உங்களது அப்பாயிண்ட்மெண்ட் பதிவு செய்யப்பட்டுள்ளது. எஸ்எம்எஸ் அனுப்பப்பட்டுள்ளது.`;
+          // Post generated output message
+          setTimeout(() => {
+            const assistantMsg: Message = {
+              id: `assistant_${Date.now()}`,
+              sender: 'assistant',
+              text: parsedData.responseText,
+              timestamp: new Date().toTimeString().split(' ')[0],
+              intentConfidence: 98,
+              toolConfidence: 96,
+              isStreaming: false
+            };
 
-          const newAppTamil: Appointment = {
-            id: 'app_rao',
-            patientId: 'pat_001',
-            doctorId: 'doc_4',
-            doctorName: 'Dr. Venkat Rao',
-            specialty: 'General Physician',
-            date: 'May 22, 2026',
-            time: '11:00 AM',
-            status: 'CONFIRMED'
-          };
-          setAppointment(newAppTamil);
-          addLog(`Tamil slot reservation confirmed for Dr. Venkat Rao at 11:00 AM`, 'calendar', 'success');
-          showToast('உறுதி செய்யப்பட்டது', 'success');
-        }
+            setMessages(prev => [...prev, assistantMsg]);
+            speakText(parsedData.responseText, responseLang);
+          }, 300);
 
-        // D1) BOOKING (Telugu variant)
-        else if (detectedLang === 'Telugu' || lowerQuery.includes('పటేల్') || lowerQuery.includes('అపాయింట్మెంట్')) {
-          intentKey = 'BOOK';
-          detectedLang = 'Telugu'; // Align speaking voice with response language
-          setOrchestrationState('GENERATING_RESPONSE');
-          setReasoningActivity('calendar.query()', 'Found Dr. Angela Patel available tomorrow మధ్యాహ్నం 02:00 PM.', 38);
-          
-          responseText = `అపాయింట్‌మెంట్ విజయవంతంగా బుక్ చేయబడింది, Swaroop Jukanti! రేపు మధ్యాహ్నం 02:00 గంటలకు కార్డియాలజిస్ట్ డాక్టర్ అంజలా పటేల్ (Dr. Angela Patel) తో మీ అపాయింట్‌మెంట్ ఖరారైంది. నిర్ధారణ సమాచారం మీ మొబైల్ నంబర్‌కు పంపబడింది.`;
+        } catch (apiErr: any) {
+          console.error("Failed backend dynamic routing:", apiErr);
+          addLog(`Backend model gateway failed: ${apiErr.message}. Falling back to clean clinical stubs.`, 'system', 'error');
 
-          const newAppTelugu: Appointment = {
-            id: 'app_patel_telugu',
-            patientId: 'pat_001',
-            doctorId: 'doc_1',
-            doctorName: 'Dr. Angela Patel',
-            specialty: 'Cardiologist',
-            date: 'May 22, 2026',
-            time: '02:00 PM',
-            status: 'CONFIRMED'
-          };
-          setAppointment(newAppTelugu);
-          addLog(`Telugu slot reservation confirmed with Dr. Angela Patel at 02:00 PM`, 'calendar', 'success');
-          showToast('ఆపాయింట్‌మెంట్ విజయవంతంగా బుక్ చేయబడింది', 'success');
-        }
+          // CLEAN CONCISE FALLBACK WITH THE CORRESPONDING ACCURATE MOCK TO PREVENT ANY UNRESPONSIVENESS
+          let responseText = '';
+          let intentKey = 'UNKNOWN';
+          let matchedDoctor = 'None';
 
-        // D2) BOOKING (Kannada variant)
-        else if (detectedLang === 'Kannada' || lowerQuery.includes('ಡಾಕ್ಟರ್') || lowerQuery.includes('ಜೆಂಕಿನ್ಸ್') || lowerQuery.includes('ಸಾರಾ')) {
-          intentKey = 'BOOK';
-          detectedLang = 'Kannada'; // Align speaking voice with response language
-          setOrchestrationState('GENERATING_RESPONSE');
-          setReasoningActivity('calendar.query()', 'Found Dr. Sarah Jenkins available tomorrow ಬೆಳಿಗ್ಗೆ 10:00 AM.', 41);
-          
-          responseText = `Swaroop, ನಾಳೆ ಬೆಳಿಗ್ಗೆ 10:00 ಗಂಟೆಗೆ ನ್ಯೂರಾಲಜಿಸ್ಟ್ ಡಾ. ಸಾರಾ ಜೆಂಕಿನ್ಸ್ (Dr. Sarah Jenkins) ಅವರೊಂದಿಗೆ ನಿಮ್ಮ ಅಪಾಯಿಂಟ್‌ಮೆಂಟ್ ಕಾಯ್ದಿರಿಸಲಾಗಿದೆ. ಎಸ್‌ಎಮ್‌ಎಸ್ ರಸೀದಿಯನ್ನು ನಿಮ್ಮ ಮೊಬೈಲ್‌ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ.`;
+          if (lowerQuery.includes('patel')) {
+            matchedDoctor = 'Dr. Angela Patel';
+          } else if (lowerQuery.includes('kumar')) {
+            matchedDoctor = 'Dr. Rajesh Kumar';
+          } else if (lowerQuery.includes('jenkins') || lowerQuery.includes('સாரா जेंक')) {
+            matchedDoctor = 'Dr. Sarah Jenkins';
+          } else if (lowerQuery.includes('rao')) {
+            matchedDoctor = 'Dr. Venkat Rao';
+          }
 
-          const newAppKannada: Appointment = {
-            id: 'app_jenkins_kannada',
-            patientId: 'pat_001',
-            doctorId: 'doc_3',
-            doctorName: 'Dr. Sarah Jenkins',
-            specialty: 'Neurologist',
-            date: 'May 22, 2026',
-            time: '10:00 AM',
-            status: 'CONFIRMED'
-          };
-          setAppointment(newAppKannada);
-          addLog(`Kannada slot reservation confirmed with Dr. Sarah Jenkins at 10:00 AM`, 'calendar', 'success');
-          showToast('ಡಾ. ಜೆಂಕಿನ್ಸ್ ಅವರೊಂದಿಗೆ ಅಪಾಯಿಂಟ್ಮೆಂಟ್ ಕಾಯ್ದಿರಿಸಲಾಗಿದೆ', 'success');
-        }
+          if (lowerQuery.includes('cancel') || lowerQuery.includes('remove') || lowerQuery.includes('रद्द')) {
+            intentKey = 'CANCEL';
+            responseText = `Swaroop, your clinical appointment with Dr. Sarah Jenkins scheduled for tomorrow at 11:00 AM has been successfully cancelled.`;
+            setAppointment(null);
+            showToast('Appointment cancelled successfully', 'success');
+          } else if (lowerQuery.includes('patel')) {
+            intentKey = 'BOOK';
+            responseText = `I have scheduled your appointment with cardiologist Dr. Angela Patel for tomorrow morning at 09:00 AM.`;
+            setAppointment({
+              id: 'app_patel_confirm',
+              patientId: 'pat_001',
+              doctorId: 'doc_1',
+              doctorName: 'Dr. Angela Patel',
+              specialty: 'Cardiologist',
+              date: 'May 22, 2026',
+              time: '09:00 AM',
+              status: 'CONFIRMED'
+            });
+            showToast('Scheduled Dr. Patel at 09:00 AM', 'success');
+          } else {
+            responseText = `Sure, Swaroop! I can book, reschedule, or cancel slots across our primary clinic roster: Cardiologist Dr. Patel, Pediatrician Dr. Kumar, Neurologist Dr. Jenkins, and General Physician Dr. Rao. What date would you prefer?`;
+          }
 
-        // E) BOOKING STANDARD (Dr. Angela Patel morning 9 AM slot)
-        else if (lowerQuery.includes('patel') && (lowerQuery.includes('9') || lowerQuery.includes('morning') || lowerQuery.includes('9:00'))) {
-          intentKey = 'BOOK';
-          detectedLang = 'English'; // Align speaking voice with response language
-          setOrchestrationState('GENERATING_RESPONSE');
-          setReasoningActivity('calendar.query()', 'Querying Dr. Patel Morning schedule range. 09:00 AM is available.', 38);
+          setSessionMemory({
+            intent: intentKey,
+            doctor: matchedDoctor,
+            time: 'None',
+            stage: 'Fallback Safe Active'
+          });
 
-          responseText = `Great news Swaroop! I have scheduled your appointment with cardiologist Dr. Angela Patel for tomorrow morning at 09:00 AM. A secure confirmation card has been pushed to your mobile index (+91 98765 43210). Have a restful day!`;
-
-          const newAppStandard: Appointment = {
-            id: 'app_patel_confirm',
-            patientId: 'pat_001',
-            doctorId: 'doc_1',
-            doctorName: 'Dr. Angela Patel',
-            specialty: 'Cardiologist',
-            date: 'May 22, 2026',
-            time: '09:00 AM',
-            status: 'CONFIRMED'
-          };
-          setAppointment(newAppStandard);
-          addLog(`Appointment locked for Dr. Angela Patel at 09:00 AM`, 'calendar', 'success');
-          showToast('Appointment Scheduled & Pushed to SMS!', 'success');
-        }
-
-        // F) GENERAL INTELLIGENT ROUTE fallback
-        else {
-          detectedLang = 'English'; // Align speaking voice with response language
-          setOrchestrationState('GENERATING_RESPONSE');
-          responseText = `Hello Swaroop, I've noted that queries regarding your clinical appointments. I can book, reschedule, or cancel slots across our primary clinical roster: Cardiologist (Dr. Patel), Pediatrician (Dr. Kumar), Neurologist (Dr. Jenkins), and General Physician (Dr. Rao). What details or providers do you require?`;
-        }
-
-        // Updates session memory
-        setSessionMemory({
-          intent: intentKey.toUpperCase(),
-          doctor: matchedDoctor,
-          time: lowerQuery.match(/\d+(:\d+)?\s*(am|pm)/i)?.[0]?.toUpperCase() || 'None',
-          stage: 'Analysis Complete'
-        });
-
-        // Post synthesized output message
-        setTimeout(() => {
-          const assistantMsg: Message = {
-            id: `assistant_${Date.now()}`,
+          const fbMsg: Message = {
+            id: `assistant_fallback_${Date.now()}`,
             sender: 'assistant',
             text: responseText,
             timestamp: new Date().toTimeString().split(' ')[0],
-            intentConfidence: 96,
-            toolConfidence: 95,
-            isStreaming: false
+            intentConfidence: 95,
+            toolConfidence: 94
           };
-
-          setMessages(prev => [...prev, assistantMsg]);
+          setMessages(prev => [...prev, fbMsg]);
           speakText(responseText, detectedLang);
-        }, 400);
-
+        }
       }, 1000);
     }, 700);
   };
@@ -997,6 +965,7 @@ export default function App() {
             isListening={isListening}
             onSendMessage={processClinicalRequest}
             onToggleMic={toggleMic}
+            onOpenVoiceHub={() => setIsVoiceHubOpen(true)}
             onSelectSlot={handleSelectSlot}
             onSelectAlternative={handleSelectAlternative}
           />
@@ -1039,6 +1008,20 @@ export default function App() {
         )}
 
       </div>
+
+      <AnimatePresence>
+        {isVoiceHubOpen && (
+          <VoiceHubModal
+            isOpen={isVoiceHubOpen}
+            onClose={() => setIsVoiceHubOpen(false)}
+            currentLanguage={currentLanguage}
+            onLanguageChange={handleLanguageChange}
+            onSendMessage={processClinicalRequest}
+            addLog={addLog}
+            showToast={showToast}
+          />
+        )}
+      </AnimatePresence>
 
     </div>
   );

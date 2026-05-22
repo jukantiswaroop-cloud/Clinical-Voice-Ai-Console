@@ -4,6 +4,13 @@ An advanced, low-latency clinical vocal agent console designed for Indian medica
 
 ---
 
+## 🎥 Demo & Live Access
+
+* **Demo Video Link**: [Watch Loom Video Presentation](https://www.loom.com/share/fd0e2df2f7744e80b529b52dd4fbd101)
+* **Project Live URL**: [Live Console Application](https://clinical-voice-ai-console-663750029754.asia-southeast1.run.app)
+
+---
+
 ## 1. System Architecture
 
 Below is the software system blueprint depicting the sequential voice processing pipeline, streaming proxies, and orchestration lifecycle:

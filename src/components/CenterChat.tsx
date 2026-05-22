@@ -19,7 +19,8 @@ import {
   BookmarkCheck,
   CheckCircle,
   Clock,
-  MessageSquare
+  MessageSquare,
+  Radio
 } from 'lucide-react';
 import { Message, Doctor, OrchestrationState } from '../types';
 
@@ -32,6 +33,7 @@ interface CenterChatProps {
   isListening: boolean;
   onSendMessage: (text: string) => void;
   onToggleMic: () => void;
+  onOpenVoiceHub: () => void;
   onSelectSlot: (doctorName: string, time: string) => void;
   onSelectAlternative: (doctorName: string, alternativeTime: string) => void;
 }
@@ -45,6 +47,7 @@ export default function CenterChat({
   isListening,
   onSendMessage,
   onToggleMic,
+  onOpenVoiceHub,
   onSelectSlot,
   onSelectAlternative
 }: CenterChatProps) {
@@ -413,25 +416,36 @@ export default function CenterChat({
       <form onSubmit={handleSubmit} className="p-4 border-t border-slate-900 bg-slate-950 flex gap-2.5 items-center justify-between sticky bottom-0 z-10">
         
         {/* Toggle Real Microphone or simulated speech synthesis */}
-        <button
-          type="button"
-          onClick={onToggleMic}
-          className={`p-3 h-11 w-11 rounded-full flex items-center justify-center border transition-all duration-300 shrink-0 relative ${
-            isListening 
-              ? 'bg-rose-500/20 text-rose-500 border-rose-500 shadow-lg shadow-rose-500/20 scale-105' 
-              : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-white'
-          }`}
-          title={isListening ? "Stop listening (mute mic)" : "Trigger interactive voice speech recognition"}
-        >
-          {isListening ? (
-            <>
-              <MicOff className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping" />
-            </>
-          ) : (
-            <Mic className="w-5 h-5" />
-          )}
-        </button>
+        <div className="flex gap-1.5 items-center shrink-0">
+          <button
+            type="button"
+            onClick={onToggleMic}
+            className={`p-3 h-11 w-11 rounded-full flex items-center justify-center border transition-all duration-300 relative ${
+              isListening 
+                ? 'bg-rose-500/20 text-rose-500 border-rose-500 shadow-lg shadow-rose-500/20 scale-105' 
+                : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-white'
+            }`}
+            title={isListening ? "Stop listening (mute mic)" : "Trigger interactive voice speech recognition"}
+          >
+            {isListening ? (
+              <>
+                <MicOff className="w-5 h-5" />
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping" />
+              </>
+            ) : (
+              <Mic className="w-5 h-5" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenVoiceHub}
+            className="p-3 h-11 w-11 rounded-full flex items-center justify-center bg-slate-900 border border-slate-800 text-teal-400 hover:border-teal-500/40 hover:text-teal-300 hover:bg-slate-850 transition-all hover:scale-105 shrink-0"
+            title="Open Aura Multilingual Dictation Pod & Local Voice Recorder"
+          >
+            <Radio className="w-5 h-5 text-teal-400" />
+          </button>
+        </div>
 
         <div className="relative flex-1">
           <input
